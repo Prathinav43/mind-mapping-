@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Mind Mapper</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style/style.css') }}">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <h1>AI Mind Mapper</h1>
+    <form id="mind-map-form">
+        <input type="text" name="topic" placeholder="Enter a topic" required>
+        <button type="submit">Generate Mind Map</button>
+    </form>
+
+    <div id="mind-map" style="width: 100%; height: 600px;"></div>
+
+    <div id="instant-answer" style="margin-top: 20px;"></div>
+
+    <script>
+        let currentMindMapData = {};  // Store current mind map data
+        let nodeDescriptions = {}; // Store descriptions for each node
+
+        document.getElementById('mind-map-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const topic = formData.get('topic');
+            fetch('/generate', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                currentMindMapData = data;  // Store generated data
+                drawMindMap(data);
+                fetchInstantAnswer(topic); // Fetch instant answer for the topic
+            })
+            .catch(error => console.error('Error:', error));
+        });
+
+        function fetchInstantAnswer(topic) {
+            const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(topic)}&format=json&no_redirect=1&no_html=1&skip_disambig=1`;
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    const answerDiv = document.getElementById('instant-answer');
+                    answerDiv.innerHTML = ''; // Clear previous answer
+
+                    // Check if the answer exists
+                    if (data.AbstractText) {
+                        answerDiv.innerHTML = `<h2>Instant Answer:</h2><p>${data.AbstractText}</p>`;
+                    } else {
+                        answerDiv.innerHTML = '<h2>No instant answer found.</h2>';
+                    }
+                })
+                .catch(error => console.error('Error fetching instant answer:', error));
+        }
+
+        function drawMindMap(data) {
+            // Store descriptions for tooltips
+            data.nodes.forEach(node => {
+                nodeDescriptions[node.text] = node.text; // The node's name is used for click handling
+            });
+
+            const traceEdges = data.edges.map(edge => ({
+                x: edge.x,
+                y: edge.y,
+                z: edge.z,
+                mode: edge.mode,
+                line: edge.line,
+                type: 'scatter3d'
+            }));
+
+            const traceNodes = data.nodes.map(node => ({
+                x: node.x,
+                y: node.y,
+                z: node.z,
+                mode: 'markers+text',
+                marker: {
+                    size: node.text === 'AI Mind Mapper' ? 30 : 20, // Larger for the main topic
+                    color: node.text === 'AI Mind Mapper' ? '#1f77b4' : '#ff7f0e',
+                    line: { width: 2, color: 'black' }
+                },
+                text: node.text,
+                type: 'scatter3d',
+                textposition: 'top center',
+                customdata: node.customdata || []  // Add custom data for child nodes
+            }));
+
+            const layout = {
+                margin: { t: 0 },
+                showlegend: false,
+                scene: {
+                    aspectmode: "cube",
+                    xaxis: { visible: false, showgrid: false },
+                    yaxis: { visible: false, showgrid: false },
+                    zaxis: { visible: false, showgrid: false }
+                }
+            };
+
+            Plotly.newPlot('mind-map', [...traceEdges, ...traceNodes], layout);
+
+            // Add click event to nodes
+            const myPlot = document.getElementById('mind-map');
+            myPlot.on('plotly_click', function(data) {
+                const clickedNode = data.points[0].text; // Get the clicked node's text
+                showNodeDescription(clickedNode);
+            });
+        }
+
+        function showNodeDescription(node) {
+            const description = nodeDescriptions[node]; // Get the description for the clicked node
+            if (description) {
+                alert(description); // Display the description in an alert
+            }
+        }
+    </script>
+
+   <script type="text/javascript">
+  (function(d, t) {
+      var v = d.createElement(t), s = d.getElementsByTagName(t)[0];
+      v.onload = function() {
+        window.voiceflow.chat.load({
+          verify: { projectID: '66fa211b94c0f528a72a5b6f' },
+          url: 'https://general-runtime.voiceflow.com',
+          versionID: 'production'
+        });
+      }
+      v.src = "https://cdn.voiceflow.com/widget/bundle.mjs"; v.type = "text/javascript"; s.parentNode.insertBefore(v, s);
+  })(document, 'script');
+</script>
